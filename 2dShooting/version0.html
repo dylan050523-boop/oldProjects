@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dodging Squares</title>
+    <style>
+        body {
+            margin: 50px;
+            background: gray;
+        }
+        .canvas {
+            background: #ccc;
+        }
+        .gameInfo {
+            display: flex;
+            flex-direction: column;
+        }
+        .gameInfo > strong {
+            font-size: xx-large;
+            line-height: 64px;
+        }
+
+        .gameStatus {
+            display: none;
+            height: 100%;
+            width: 100%;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            position: absolute;
+            background: rgba(72, 69, 69, 0.7);
+            left: 0;
+            top: 0;
+            color: #fafafa;
+            font-size: 45px;
+        }
+
+        .gameStatus > .difficultyScreen {
+            display: none;
+            /* display: none; */
+        }
+
+        .difficulties {
+            display:flex;
+            flex-direction: column;
+        }
+
+        .difficulties > button {
+            margin: 15px;
+            font-size: 50%;
+            width: 200px;
+        }
+
+        .gameOverScreen{
+            /* display: contents; */
+            display: none;
+        }
+        .gameOverScreen > .finalScore {
+            font-size: 60%;
+        }
+        .gameOverScreen > .restart {
+            margin: 15px;
+            font-size: 25px;
+        }
+
+        .itemName {
+            font-size: 50px;
+        }
+        /* .gameOverScreen {
+            display: none;
+        } */
+    </style>
+</head>
+<body>
+    <div class="gameInfo">
+        <strong class="score">점수: 0</strong>
+        <strong class="time">시간: 0분 0초</strong>
+        <strong class="phase">페이즈: 0</strong>
+        <strong class="lifeLine">목숨: 3</strong>
+    </div>
+    <canvas class="canvas" width="600" height="400"></canvas>
+    <div>
+        <strong class="itemName">----</strong>
+    </div>
+    <div class="gameStatus">
+
+        <div class="difficultyScreen">
+            <div class="difficulty">난이도를 선택해주세요.</div>
+            <div class="difficulties">
+                <button>Easy</button>
+                <button>Normal</button>
+                <button>Hard</button>
+            </div>
+        </div>
+
+        <div class="gameOverScreen">
+            <div class="gameOver">Game Over</div>
+            <div class="finalScore">최종점수: 0</div>
+            <button class="restart" onclick="game.showDifficult()">
+                <strong>게임 재시작</strong>
+            </button>
+        </div>
+    </div>
+
+
+    <script>
+        "use strict"
+
+        class Game {
+            static itemContext = document.querySelector(".itemName");
+            constructor() {
+                this.canvas = document.querySelector(".canvas");
+                this.ctx = this.canvas.getContext("2d");
+                console.log(this.ctx);
+                this.width = this.canvas.width;
+                this.height = this.canvas.height;
+
+                this.gameStatus = document.querySelector(".gameStatus");
+                this.gameOver = document.querySelector(".gameStatus > .gameOverScreen");
+                this.difficultDisplay = document.querySelector('.gameStatus > .difficultyScreen');
+                this.difficult = null;
+                this.scoreDisplay = document.querySelector(".score");
+                this.timeDisplay = document.querySelector(".time");
+                this.phaseDisplay = document.querySelector(".phase");
+                this.lifeContext = document.querySelector(".lifeLine");
+                this.finalScoreDisplay = document.querySelector(".finalScore");
+
+                this.arrowDirection = {
+                    w: false,
+                    a: false,
+                    s: false,
+                    d: false,
+                };
+
+                this.isGameOver = false;
+
+                this.showDifficult();
+                this.initEventListeners();
+            }
+
+            initEventListeners() {
+                document.body.addEventListener("keydown", (event) => this.handleKey(event, true));
+                document.body.addEventListener("keyup", (event) => this.handleKey(event, false));
+                this.canvas.addEventListener("mousemove", (event) => this.handleMouse(event));
+                this.difficultDisplay.addEventListener("click", (event) => this.showDifficult(event.target));
+            }
+
+            showDifficult(event) {
+                if (!event) {
+                    this.gameOver.style.display = "none";
+                    this.gameStatus.style.display = "flex";
+                    this.difficultDisplay.style.display = "contents";
+                    return;
+                }
+                if (event.textContent === 'Easy' ||
+                    event.textContent === 'Normal' ||
+                    event.textContent === 'Hard') {
+                        this.difficultDisplay.style.display = "none";
+                        this.gameStatus.style.display = "none";
+                        this.difficult = event.textContent;
+                        this.startGame();
+                }
+            }
+
+            startGame() {
+                this.resetVariables();
+                this.gameLoop();
+                this.startTimer();
+            }
+
+            resetVariables() {
+                this.totalScore = 0;
+                this.scoreDisplay.textContent = `점수: ${this.totalScore}`;
+                this.bullets = [];
+                this.seconds = 0;
+                this.phaseNum = 0;
+                this.lifeLine = 3;
+                this.item = null;
+                this.isGameOver = false;
+                this.timeDisplay.textContent = `시간: 0분 0초`;
+                this.phaseDisplay.textContent = `페이즈: ${this.phaseNum}`;
+
+                Circle.circleSpeed = 5;
+                Circle.circleRadius = 13;
+                this.circle = new Circle(this.ctx, this.width / 2, this.height / 2);
+                this.circle.draw();
+
+                Rect.squareSpeed = 1;
+                this.xRects = this.generateRects(2, this.random(0, 2), "x");
+                this.yRects = this.generateRects(2, this.random(0, 2), "y");
+                if (this.difficult === 'Hard') {
+                    this.dynamicRects = [];
+                    this.dynamicRects.push(this.generateDynamicRects());
+                }
+            }
+
+            random(start, limit) {
+                if (limit === undefined) {
+                    limit = start;
+                    start = 0;
+                }
+                return Math.floor(Math.random() * (limit - start)) + start;
+            }
+
+            randomRGB() {
+                const r = this.random(256);
+                const g = this.random(256);
+                const b = this.random(256);
+                return `rgb(${r},${g},${b})`;
+            }
+
+            startTimer() {
+                clearInterval(this.gameInterval);
+                this.gameInterval = setInterval(() => {
+                    this.seconds++;
+                    this.timeDisplay.textContent = `시간: 
+                    ${Math.floor(this.seconds / 60)}분 
+                    ${this.seconds % 60}초`;
+                    
+                    if (this.seconds % 20 === 0 && this.phaseNum < 5) {
+                        this.phaseNum++;
+                        Rect.squareSpeed += this.phaseNum / 6;
+                        this.phaseDisplay.textContent = `페이즈: ${this.phaseNum}`;
+                    }
+                    
+                    if (this.seconds % 3 === 0 && this.difficult === 'Hard') {
+                        this.dynamicRects.push(this.generateDynamicRects());
+                    }
+                    
+                    this.itemExpireTime = 5;
+                    if (this.seconds % 10 === 0) {
+                        this.spawnItem();
+                        this.itemTimer = this.seconds + this.itemExpireTime;
+                    }
+                    if (!!this.item && this.itemTimer === this.seconds) {
+                        this.item = null;
+                    }
+                }, 1000);
+            }
+
+            showGameOver() {
+                this.finalScoreDisplay.textContent = `최종점수: ${this.totalScore}`;
+                this.gameStatus.style.display = "flex";
+                this.gameOver.style.display = "contents";
+                clearInterval(this.gameInterval);
+                cancelAnimationFrame(this.gameLoop)
+                this.isGameOver = true;
+            }
+
+            circleRectCollision(circle, rect) {
+                // const closestX = Math.max(rect.x, Math.min(circle.x, rect.x + rect.size));
+                // const closestY = Math.max(rect.y, Math.min(circle.y, rect.y + rect.size));
+                //
+                // const distanceX = circle.x - closestX;
+                // const distanceY = circle.y - closestY;
+                //
+                // const distanceSquared = distanceX * distanceX + distanceY * distanceY;
+                //
+                // return distanceX ** 2 + distanceY ** 2 < Circle.circleRadius ** 2;
+            }
+
+            bulletRectCollision(bullet, rect) {
+                // const closestX = Math.max(rect.x, Math.min(bullet.x, rect.x + rect.size));
+                // const closestY = Math.max(rect.y, Math.min(bullet.y, rect.y + rect.size));
+                //
+                // const distanceX = bullet.x - closestX;
+                // const distanceY = bullet.y - closestY;
+                //
+                // return distanceX ** 2 + distanceY ** 2 < bullet.w ** 2;
+            }
+
+            itemCircleCollision(item, circle) {
+                const dx = item.x - circle.x;
+                const dy = item.y - circle.y;
+                const distanceSquared = dx * dx + dy * dy;
+
+                const radius = item.radius + Circle.circleRadius;
+                return distanceSquared < radius * radius;
+            }
+
+
+            generateDynamicRects() {
+                const quadDimension = this.random(1, 5);
+                const rects = [];
+                const rectSize = 20;
+                const spawnPoint = {
+                    1: [0, 0],
+                    2: [this.width - rectSize, 200],
+                    3: [0, this.height - rectSize],
+                    4: [this.width - rectSize, this.height - rectSize]
+                };
+                const [x, y] = spawnPoint[quadDimension];
+                return new Rect(this.ctx, x, y, this.randomRGB(), rectSize);
+            }
+
+            generateRects(n, idx, axis) {   
+                const rects = [];
+                const rectSize = 30;
+                const width = this.width - rectSize;
+                const height = this.height - rectSize;
+                const directions = { 0: 1, 1: -1 };
+                const positions = { y: [0, height], x: [0, width] };
+
+                for (let i = 0; i < n; i++) {
+                    let rect;
+                    let overlapping;
+                    let num = idx;
+                    if (i % 2 === 0 && (this.difficult === 'Normal' || this.difficult === 'Hard')) {
+                        num = Number(!Boolean(idx));
+                    }
+                    do {
+                        if (axis === "y") {
+                            rect = new Rect(
+                                this.ctx,
+                                this.random(width), positions.y[num],
+                                this.randomRGB(),
+                                rectSize, axis, directions[num],
+                            );
+                        } else {
+                            rect = new Rect(
+                                this.ctx,
+                                positions.x[num], this.random(height),
+                                this.randomRGB(),
+                                rectSize, axis, directions[num],
+                            );
+                        }
+                        overlapping = rects.some((r) => this.checkOverlap(r, rect));
+                    } while (overlapping);
+                    rects.push(rect);
+                }
+                return rects;
+            }
+
+            checkOverlap(r1, r2) {
+                return (
+                    r1.x < r2.x + r2.size &&
+                    r1.x + r1.size > r2.x &&
+                    r1.y < r2.y + r2.size &&
+                    r1.y + r1.size > r2.y
+                );
+            }
+
+            clearCanvas() {
+                this.ctx.clearRect(0, 0, this.width, this.height);
+            }
+
+            getItem(x, y) {
+                const itemRadius = 5;
+                const modifiers = [
+                    // 버프
+                    new Item(2, 0, 0, 0, 0,
+                        this.ctx, x, y, itemRadius,
+                        `버프: 총알 속도 증가`),
+                    new Item(0, 0, 1, 0, 0,
+                        this.ctx, x, y, itemRadius,
+                        `버프: 플레이어 속도 증가`),
+                    new Item(0, 0, 0, 0, 1,
+                        this.ctx, x, y, itemRadius,
+                        `버프: 목숨 + 1`),
+                    new Item(0, 0, 0, -1, 0,
+                        this.ctx, x, y, itemRadius,
+                        `버프: 플레이어 크기 감소`),
+                    new Item(0, -0.5, 0, 0, 0,
+                        this.ctx, x, y, itemRadius,
+                        `버프: 장애물 속도 감소`),
+                    // 디버프
+                    new Item(-2, 0, 0, 0, 0,
+                        this.ctx, x, y, itemRadius,
+                        `디버프: 총알 속도 감소`),
+                    new Item(0, 2, 0, 0, 0,
+                        this.ctx, x, y, itemRadius,
+                        `디버프: 장애물 속도 증가`),
+                    new Item(0, 0, -2, 0, 0,
+                        this.ctx, x, y, itemRadius,
+                        `디버프: 플레이어 속도 감소`),
+                    new Item(0, 0, 0, 2, 0,
+                        this.ctx, x, y, itemRadius,
+                        `디버프: 플레이어 크기 증가`)
+                ];
+                const idx = this.random(modifiers.length);
+                this.item = modifiers[idx];
+            }
+
+            spawnItem() {
+                const itemRadius = 5;
+                const xRange = [this.circle.x - 50, this.circle.x + 50];
+                const yRange = [this.circle.y - 30, this.circle.y + 30];
+                
+                while (true) {
+                    const itemX = this.random(0 + itemRadius, this.width - itemRadius);
+                    const itemY = this.random(0 + itemRadius, this.height - itemRadius);
+                    const b1 = !((xRange[0] < itemX) && (itemX < xRange[1]));
+                    const b2 = !((yRange[0] < itemY) && (itemY < yRange[1]));
+                
+                    if(b1 && b2) {
+                        this.getItem(itemX, itemY);
+                        break;
+                    }
+                }
+            }
+
+            moveBullets() {
+                for (let i = this.bullets.length - 1; i >= 0; i--) {
+                    const bullet = this.bullets[i];
+                    bullet.move();      
+                    bullet.draw();
+                    if (
+                        bullet.x > this.width ||
+                        bullet.y > this.height ||
+                        bullet.x < 0 ||
+                        bullet.y < 0
+                    ) {
+                        this.bullets.splice(i, 1);
+                    }
+                }
+            }
+
+            setBullet() {
+                const { x, y } = this.circle;
+                const r = Circle.circleRadius;
+                const w = 6;
+                const h = 6;
+                this.getBulletVelocity();
+                this.bullets.push(new Bullet(this.ctx, x, y, w, h,
+                                            [this.bulletX, this.bulletY]));
+            }
+
+            moveNormalRects(rects, axis) {
+                if (!rects.length) {
+                    return;
+                }
+                for (let i = rects.length - 1; i >= 0; i--) {
+                    const rect = rects[i];
+                    if (!rect) {
+                        break;
+                    }
+                    rect.update();
+                    rect.draw();
+                    rects = this.updateAndDrawRects(rects, rect, axis, i);
+                }
+                return rects;
+            }
+
+            moveDynamicRects() {
+                for (let i = this.dynamicRects.length - 1; i >= 0; i--) {
+                    const rect = this.dynamicRects[i];
+                    if (!rect || !this.circle) {
+                        break;
+                    }
+                    rect.updateDynamicRect(this.circle);
+                    rect.draw();
+                    this.dynamicRects = this.updateAndDrawRects(this.dynamicRects, rect, null, i);
+                }
+            }
+
+            updateAndDrawRects(rects, rect, axis, idx) {  
+                // console.log(Rect.squareSpeed);
+                for (let i = 0; i < this.bullets.length; i++) {
+                    const bullet = this.bullets[i];
+                    if (this.bulletRectCollision(bullet, rect)) {
+                        rects.splice(idx, 1);
+                        this.bullets.splice(i, 1);
+                        this.totalScore += 50;
+                        this.scoreDisplay.textContent = `점수: ${this.totalScore}`;
+                        break;
+                    }
+                }
+                
+                if (this.circleRectCollision(this.circle, rect)) {
+                    this.lifeLine -= 1;
+                    rects.splice(idx, 1);
+                    this.lifeContext.textContent = `목숨: ${this.lifeLine}`
+
+                    if (this.lifeLine <= 0) {
+                        this.showGameOver();
+                        return [];
+                    }
+                }
+                
+                if ((axis === "y" && (rect.y > this.height || rect.y < -rect.size)) ||
+                    (axis === "x" && (rect.x > this.width || rect.x < -rect.size))) {
+                        rects.splice(idx, 1);
+                } else if (!axis && ((rect.x > this.width || rect.x < 0) ||
+                                     (rect.y > this.height || rect.y < 0))) {
+
+                    this.dynamicRects.splice(idx, 1);
+                    this.dynamicRects.splice(idx, 1);
+                }
+
+                if (rects.length === 0 && !!axis) {
+                    Rect.squareSpeed += 0.01;
+                    rects = this.generateRects(
+                        this.random(2 + this.phaseNum, 3 + this.phaseNum),
+                        this.random(0, 2),
+                        axis
+                    );
+                } 
+                return rects;
+            }
+
+            updateItems() {
+                if (!this.item) {
+                    return;
+                }
+                this.item.draw();
+                if (this.itemCircleCollision(this.item, this.circle)) {
+                    this.totalScore += 200;
+                    if (this.item.lifeIncrement !== 0) {
+                        this.lifeLine += this.item.lifeIncrement;
+                        this.lifeContext.textContent = `목숨: ${this.lifeLine}`;
+                        Game.itemContext.textContent = this.item.itemName;
+                        setTimeout(() => {
+                            Game.itemContext.textContent = '';
+                        }, 3000);
+                        this.item = null;
+                        return;
+                    }
+                    this.item.apply();
+                }
+            }
+
+            gameLoop() {
+                if (this.isGameOver) {
+                    return;
+                }
+                this.circle.move(this.arrowDirection, this.width, this.height);
+                this.clearCanvas();
+                this.circle.draw();
+                this.drawLine();
+                this.updateItems();
+                this.moveBullets();
+                this.xRects = this.moveNormalRects(this.xRects, "x"); 
+                this.yRects = this.moveNormalRects(this.yRects, "y");
+                if (this.difficult === 'Hard') {
+                    this.moveDynamicRects();
+                }
+                requestAnimationFrame(() => this.gameLoop());
+            }
+
+            handleKey(event, isKeyDown) {
+                if (this.isGameOver) {
+                    return;
+                }
+                if (event.code === "Space" && isKeyDown) {
+                    this.setBullet();
+                }
+
+                if (["w", "a", "s", "d"].includes(event.key)) {
+                    this.lastKeyPressed = event.key
+                    this.arrowDirection[event.key] = isKeyDown;
+                }
+            }
+
+            getBulletVelocity() {
+                const bx = this.circle.x - this.eventX;
+                const by = this.circle.y - this.eventY;
+
+                const distance = Math.sqrt(bx * bx + by * by);
+
+                this.bulletX = -((bx / distance) * Bullet.bulletSpeed);
+                this.bulletY = -((by / distance) * Bullet.bulletSpeed);
+            }
+
+
+            drawLine() {
+                this.ctx.save(); // 캔버스 상태 저장
+
+                // 원점 이동: 플레이어의 위치로 이동
+                this.ctx.translate(this.circle.x, this.circle.y);
+                // 캔버스 회전: 플레이어의 각도로 회전
+                this.ctx.rotate(this.angle);
+
+                // 발사 방향 표시 선 그리기
+                this.ctx.beginPath();
+                this.ctx.moveTo(0, 0); // 현재 위치가 플레이어의 위치
+                this.ctx.lineTo(Circle.circleRadius + 20, 0); // 선을 x축 방향으로 그림
+                this.ctx.strokeStyle = 'purple';
+                this.ctx.lineWidth = 5;
+                this.ctx.stroke();
+                this.ctx.closePath();
+
+                this.ctx.restore(); // 캔버스 상태 복원
+            }
+
+            handleMouse(event) {
+                this.eventX = event.offsetX;
+                this.eventY = event.offsetY;
+                const dx = this.eventX - this.circle.x;
+                const dy = this.eventY - this.circle.y;
+                this.angle = Math.atan2(dy, dx);
+            }
+        }
+
+        class Circle {
+            static circleSpeed = 5;
+            static circleRadius = 13;
+            constructor(ctx, x, y, radius, speed) {
+                this.ctx = ctx;
+                this.x = x;
+                this.y = y;
+            }
+
+            draw() {
+                this.ctx.beginPath();
+                this.ctx.arc(this.x, this.y, Circle.circleRadius, 0, Math.PI * 2);
+                this.ctx.fillStyle = "red";
+                this.ctx.fill();
+            }
+
+            move(arrowDirection, canvasWidth, canvasHeight) {
+                if (arrowDirection.s && this.y + Circle.circleRadius + Circle.circleSpeed < canvasHeight) {
+                    this.y += Circle.circleSpeed;
+                }
+                if (arrowDirection.w && this.y - Circle.circleRadius - Circle.circleSpeed > 0) {
+                    this.y -= Circle.circleSpeed;
+                }
+                if (arrowDirection.a && this.x - Circle.circleRadius - Circle.circleSpeed > 0) {
+                    this.x -= Circle.circleSpeed;
+                }
+                if (arrowDirection.d && this.x + Circle.circleRadius + Circle.circleSpeed < canvasWidth) {
+                    this.x += Circle.circleSpeed;
+                }
+            }
+        }
+
+        class Rect {
+            static squareSpeed = 1;
+            constructor(ctx, x, y, color, size, axis, direct) {
+                this.ctx = ctx;
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.size = size;
+                this.axis = axis;
+                this.direct = direct;
+            }
+
+            update() {
+                if (this.axis === "x") {
+                    this.x += Rect.squareSpeed * this.direct;
+                } else {
+                    this.y += Rect.squareSpeed * this.direct;
+                }
+            }
+
+            updateDynamicRect(circle) {
+                const dx = circle.x - this.x;
+                const dy = circle.y - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                this.x += (dx / distance) * Rect.squareSpeed;
+                this.y += (dy / distance) * Rect.squareSpeed;
+            }
+
+            draw() {
+                this.ctx.fillStyle = this.color;
+                this.ctx.fillRect(this.x, this.y, this.size, this.size);
+            }
+        }
+
+        class Bullet {
+            static bulletSpeed = 1;
+            constructor(ctx, x, y, w, h, velocity) {
+                this.ctx = ctx;
+                this.x = x;
+                this.y = y;
+                this.w = w;
+                this.h = h;
+                this.velocity = velocity;
+            }
+
+            move() {
+                this.x += this.velocity[0];
+                this.y += this.velocity[1];
+            }
+
+            draw() {
+                this.ctx.fillStyle = "blue";
+                this.ctx.fillRect(this.x - this.w / 2, this.y - this.h / 2, this.w, this.h);
+            }
+        }
+
+        class Item {
+            constructor(
+                        bulletSpeed, rectSpeed, circleSpeed, circleSize, lifeIncrement,
+                        ctx, x, y, radius, itemName) {
+                this.bulletSpeed = bulletSpeed;
+                this.rectSpeed = rectSpeed;
+                this.circleSpeed = circleSpeed;
+                this.circleSize = circleSize;
+                this.lifeIncrement = lifeIncrement;
+                this.ctx = ctx;
+                this.x = x;
+                this.y = y;
+                this.radius = radius;
+                this.itemName = itemName;
+                this.duration = 5000;
+            }
+            
+            draw() {
+                this.ctx.beginPath();
+                this.ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                this.ctx.fillStyle = "red";
+                this.ctx.fill();
+            }
+
+            apply() {
+                Circle.circleSpeed += this.circleSpeed;
+                Circle.circleRadius += this.circleSize;
+                Rect.squareSpeed += this.rectSpeed;
+                Bullet.bulletSpeed += this.bulletSpeed;
+                Game.itemContext.textContent = this.itemName;
+                this.x = 0;
+                this.y = 0;
+                this.radius = null;
+
+                this.timeoutId = setTimeout(() => {
+                    // 적용된 버프 목록에서 제거
+                    Circle.circleSpeed -= this.circleSpeed;
+                    Circle.circleRadius -= this.circleSize;
+                    Rect.squareSpeed -= this.rectSpeed;
+                    Bullet.bulletSpeed -= this.bulletSpeed;
+                    Game.itemContext.textContent = '';
+                }, this.duration);
+            }
+        }
+
+        const game = new Game();
+    </script>
+</body>
+</html>

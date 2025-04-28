@@ -1,0 +1,107 @@
+
+body {
+    margin: 0;
+}
+
+/* li {
+    list-style: none;
+} */
+
+ul {
+    list-style: none;
+}
+
+.container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.board > ul {
+    margin: 0;
+    padding: 0;
+    width: 600px;
+    height: 600px;
+    outline: 1px solid steelblue;
+}
+
+.board > ul > li {
+    height: auto;
+    width: auto;
+    display: flex;
+}
+
+.board > ul > li > ul {
+    padding: 0;
+    display: flex;
+}
+
+.board > ul > li > ul > li {
+    width: 75px;
+    height: 75px;
+    /* background-color: aqua; */
+    outline: 1px solid black;
+    text-align: center;
+    background-size: contain;
+    /* text-justify: auto; */
+    /* align-self: center; */
+    /* align-items: center; */
+}
+
+.color_1 {
+    background-color: #739552;
+}
+
+.color_2 {
+    background-color: #ebecd0;
+}
+
+.black_king {
+    background-image: url('image/blackObject/Chess_kdt45.svg');
+    background-size: 45px
+}
+.black_bishop {
+    background-image: url('image/blackObject/Chess_bdt45.svg');
+    background-size: 45px
+}.black_knight {
+    background-image: url('image/blackObject/Chess_ndt45.svg');
+    background-size: 45px
+}.black_pawn {
+    background-image: url('image/blackObject/Chess_pdt45.svg');
+    background-size: 45px
+}.black_queen {
+    background-image: url('image/blackObject/Chess_qdt45.svg');
+    background-size: 45px
+}.black_rook {
+    background-image: url('image/blackObject/Chess_rdt45.svg');
+    background-size: 45px
+}
+
+
+.white_king {
+    background-image: url('image/whiteObject/Chess_klt45.svg');
+    background-size: 45px
+}
+.white_bishop {
+    background-image: url('image/whiteObject/Chess_blt45.svg');
+    background-size: 45px
+}.white_knight {
+    background-image: url('image/whiteObject/Chess_nlt45.svg');
+    background-size: 45px
+}.white_pawn {
+    background-image: url('image/whiteObject/Chess_plt45.svg');
+    background-size: 45px
+}.white_queen {
+    background-image: url('image/whiteObject/Chess_qlt45.svg');
+    background-size: 45px
+}.white_rook {
+    background-image: url('image/whiteObject/Chess_rlt45.svg');
+    background-size: 45px
+}
+
+/* .marker {
+    background-image: url('image/kisspng-circle-clip-art-creative-polygon-5b2edb70a2d771.404661751529797488667.jpg');
+    background-size: 45px;
+    background-
+} */

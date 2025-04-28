@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>바운스볼</title>
+    <style>
+        /* 기본 스타일 설정 */
+        * {
+            overflow: hidden;
+        }
+
+        /* 배경 색상 및 레이아웃 설정 */
+        body {
+            background: gray;
+        }
+
+        .canvas {
+            background: #000;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas class="canvas" width="800" height="500"></canvas>
+
+    <script>
+        /* 엔티티의 기본 속성 정의 및 그리기 기능 */
+        class Entity {
+            constructor(ctx, x, y, w, h, color) {
+                this.ctx = ctx;
+                this.x = x;
+                this.y = y;
+                this.w = w;
+                this.h = h;
+                this.color = color;
+            }
+            draw() {}
+        }
+
+        /* 게임 클래스 - 주요 로직 및 초기화 */
+        class Game {
+            constructor() {
+                this.canvas = document.querySelector(".canvas");
+                this.ctx = this.canvas.getContext("2d");
+                this.width = this.canvas.width;
+                this.height = this.canvas.height;
+                this.circle = new Circle(this.ctx, 200, 400, 25, this.randomRGB());
+                this.initEntities();
+                this.gameLoop();
+            }
+
+            initEntities() {
+                // const result = [];
+                this.rects = [];
+                this.stars = [];
+                const rad = this.circle.radius;
+                const [w, h] = [250, 50];
+                while (true) { // result.length < 3
+                    const rect = new Rect(
+                        this.ctx,
+                        this.random(0, this.width - w),
+                        this.random(0, this.height - h),
+                        w, h, this.randomRGB()
+                    );
+                    const star = new Star(
+                        this.ctx,
+                        this.random(rad, this.width - rad),
+                        this.random(rad, this.height - rad),
+                        rad, rad / 2, 5, this.randomRGB()
+                    )
+                    
+                    if (this.rects.length < 3) {
+                        if (rect.y > 325 && this.rects.length === 0) { 
+                            this.rects.push(rect);
+                            continue;
+                        }
+                        if (rect.isValidPosition(this.rects, 60, 120) && this.rects.length > 0) {
+                            this.rects.push(rect);
+                        }
+                    } else if (this.stars.length < 3) {
+                        if (star.isValidPosition() &&  star.isOverLapping(this.rects)) {
+                            this.stars.push(star);
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            /* 게임 루프 - 매 프레임 호출 */
+            gameLoop() {
+                this.ctx.clearRect(0, 0, this.width, this.height);
+                this.circle.draw();
+                this.circle.update();
+                this.drawEntity(this.rects);
+                this.drawEntity(this.stars);
+                this.checkCollision(this.rects);
+                this.checkCollision(this.stars);
+                if (this.stars.length === 0) {
+                    console.log(this.stars);
+                    this.initEntities();
+                }
+                requestAnimationFrame(() => this.gameLoop());
+            }
+
+            /* 엔티티 색칠 */
+            drawEntity(entity) {
+                entity.forEach(e => {
+                    e.draw();
+                });
+            }
+
+            /* 엔티티 충돌체크 */
+            checkCollision(entity) {
+                entity.forEach((e, idx) => {
+                    if (this.circle.collision(e)) {
+                        if (this.stars.includes(e)) { // star
+                            entity.splice(idx, 1);
+                        } else { // rect
+                            e.collision(this.circle);
+                        }
+                    }
+                });
+            }
+
+            /* 난수 생성 */
+            random(start, limit) {
+                if (limit === undefined) {
+                    limit = start;
+                    start = 0;
+                }
+                return Math.floor(Math.random() * (limit - start)) + start;
+            }
+
+            /* 랜덤 색상 생성 */
+            randomRGB() {
+                const r = this.random(256);
+                const g = this.random(256);
+                const b = this.random(256);
+                return `rgb(${r},${g},${b})`;
+            }
+
+            /* 모든 장애물의 y 좌표 반환 */
+            getSquareY(rects) {
+                const result = [];
+                rects.forEach(rect => {
+                    result.push(rect.y);
+                });
+                return result;
+            } 
+        }
+
+
+        /* 별 엔티티 */
+        class Star extends Entity {
+            constructor(ctx, x, y, outerRadius, innerRadius, points, color) {
+                super(ctx, x, y, outerRadius, innerRadius, color);
+                this.outerRadius = outerRadius;
+                this.innerRadius = innerRadius;
+                this.radius = outerRadius;
+                this.points = points;
+            }
+
+            /* 별 그리기 */
+            draw() {
+                const angleStep = Math.PI / this.points;
+                this.ctx.beginPath();
+                for (let i = 0; i < 2 * this.points; i++) {
+                    const angle = i * angleStep;
+                    const radius = i % 2 === 0 ? this.outerRadius : this.innerRadius;
+                    const xPos = this.x + Math.cos(angle) * radius;
+                    const yPos = this.y - Math.sin(angle) * radius;
+                    this.ctx.lineTo(xPos, yPos);
+                }
+                this.ctx.closePath();
+                this.ctx.fillStyle = this.color;
+                this.ctx.fill();
+            }
+
+            /* 엔티티 좌표 중복 체크 */
+            isOverLapping(entity) {
+                return entity.every((e) => {
+                    const entityLeft = e.x;
+                    const entityRight = e.x + e.w;
+                    const entityTop = e.y;
+                    const entityBottom = e.y + e.h;
+
+                    const starTop = this.y - this.radius;
+                    const starBottom = this.y + this.radius
+                    const starLeft = this.x - this.radius;
+                    const starRight = this.x + this.radius;
+
+                    return (
+                        starRight <= entityLeft ||
+                        starLeft >= entityRight ||
+                        starBottom <= entityTop ||
+                        starTop >= entityBottom   
+                    )
+                });
+            }
+
+            isValidPosition() {
+                const xMaxDistance = 200;
+                const yMaxDistance = 325;
+
+                const xDist = Math.abs(400 - this.x);
+                const yDist = Math.abs(400 - this.y);
+
+                return xDist <= xMaxDistance && yDist <= yMaxDistance;
+            }
+        }
+
+        /* 사각형 엔티티 */
+        class Rect extends Entity {
+            constructor(ctx, x, y, w, h, color) {
+                super(ctx, x, y, w, h, color);
+            }
+
+            /* 사각형 그리기 */
+            draw() {
+                this.ctx.fillStyle = this.color;
+                this.ctx.fillRect(this.x, this.y, this.w, this.h);
+            }
+
+            /* 충돌 영역 가져오기 */
+            getRectangle() {
+                return {
+                    left: this.x,
+                    top: this.y,
+                    right: this.x + this.w,
+                    bottom: this.y + this.h
+                }
+            }
+
+            /* 장애물 원 간 충돌 처리 */
+            collision(circle) {
+                const rect = this.getRectangle();
+                const circleRectangle = circle.getRectangle();
+
+                if (circleRectangle.bottom > rect.top &&
+                    circleRectangle.top < rect.top && circle.velY > 0) {
+                    circle.y = rect.top - circle.radius;
+                    circle.velY = circle.jumpPower;
+
+                } else if (circleRectangle.top < rect.bottom &&
+                    circleRectangle.bottom > rect.bottom && circle.velY < 0) {
+                    circle.y = rect.bottom + circle.radius;
+                    circle.velY = -circle.velY * circle.elasticity;
+
+                } else if (circleRectangle.right > rect.left &&
+                    circleRectangle.left < rect.left && circle.speed > 0) {
+                    circle.x = rect.left - circle.radius * 2;
+                    circle.speed = -circle.speed * circle.elasticity;
+
+                } else if (circleRectangle.left < rect.right &&
+                    circleRectangle.right > rect.right && circle.speed < 0) {
+                    circle.x = rect.right + circle.radius * 2;
+                    circle.speed = -circle.speed * circle.elasticity;
+                }
+            }
+
+            /* 모든 장애물의 y 좌표 반환 */
+            getSquareY(rects) {
+                const result = [];
+                rects.forEach(rect => {
+                    result.push(rect.y);
+                });
+                return result;
+            } 
+
+            // 사각형 위치 유효성 검사
+            isValidPosition(rects, minDist, maxDist) {
+                const rectY = this.getSquareY(rects);
+                rectY.push(this.y);
+                rectY.sort((a, b) => a > b ? 1 : -1);
+                for (let i = 0; i < rectY.length - 1; i++) { // 가장 낮은 사각형에서 가장 높은 사각형까지
+                    const distance = Math.abs(rectY[i] - (rectY[i + 1] - 50));
+                    if (distance < minDist || distance > maxDist) { 
+                        return false; // 사각형들 간의 거리 조건
+                    }
+                }
+                return true;
+            }
+        }
+
+        /* 원 엔티티 */
+        class Circle extends Entity {
+            constructor(ctx, x, y, radius, color) {
+                super(ctx, x, y, radius, radius, color);
+                this.radius = radius;
+                this.speed = 0;
+                this.velY = 0;
+                this.jumpPower = -20;
+                this.acceleration = 1.2;
+                this.elasticity = 0.8;
+                this.arrowDirection = {
+                    ArrowLeft: false,
+                    ArrowRight: false
+                };
+
+                document.addEventListener('keydown', (event) => {
+                    this.arrowDirection.ArrowRight = false;
+                    this.arrowDirection.ArrowLeft = false;
+                    this.arrowDirection[event.code] = true;
+                });
+
+                document.addEventListener('keyup', (event) => {
+                    this.arrowDirection[event.code] = false;
+                });
+            }
+
+            /* 원 그리기 */
+            draw() {
+                this.ctx.beginPath();
+                this.ctx.fillStyle = this.color;
+                this.ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+
+            // 원 이동
+            update() {
+                if (this.arrowDirection.ArrowLeft) {
+                    this.speed = Math.max(this.speed - this.acceleration, -7);
+                }
+                if (this.arrowDirection.ArrowRight) {
+                    this.speed = Math.min(this.speed + this.acceleration, 7);
+                }
+
+                if (this.speed !== 0) {
+                    this.speed += -(0.1 * Math.sign(this.speed));
+                }
+
+                if (Math.abs(this.speed) < 0.1) {
+                    this.speed = 0;
+                }
+
+                this.velY += 1;
+                this.y += this.velY;
+                this.x += this.speed;
+
+                this.boardCollisions();
+            }
+
+            boardCollisions() {
+                if (this.y >= 500 - this.radius) {
+                    this.y = 500 - this.radius;
+                    this.velY = this.jumpPower;
+                }
+                if (this.x <= this.radius) {
+                    this.x = this.radius * 2;
+                    this.speed = -this.speed * this.elasticity;
+                } else if (this.x >= 800 - this.radius) {
+                    this.x = 800 - this.radius * 2;
+                    this.speed = -this.speed * this.elasticity;
+                }
+            }
+
+            /* 충돌감지 - 2 */
+            collision(entity) {
+                const closestX = Math.max(entity.x, Math.min(this.x, entity.x + entity.w));
+                const closestY = Math.max(entity.y, Math.min(this.y, entity.y + entity.h)); // star = outerRadius, rect = w 또는 h
+                const distanceX = (this.x - closestX);
+                const distanceY = (this.y - closestY);
+                const distanceSquared = distanceX * distanceX + distanceY * distanceY;
+                return distanceSquared < (this.radius ** 2);
+            }
+
+            /* 원 충돌 처리 */
+            getRectangle() {
+                return {
+                    left: this.x - this.radius,
+                    top: this.y - this.radius,
+                    right: this.x + this.radius,
+                    bottom: this.y + this.radius
+                }
+            }
+        }
+
+        const game = new Game(); // 게임 시작
+    </script>
+</body>
+
+</html>

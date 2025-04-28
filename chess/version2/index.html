@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Chess</title>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: grid;
+            place-items: center;
+
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .container {
+        }
+
+        .row {
+            display: flex;
+        }
+
+        .cell {
+            width: 100px;
+            height: 100px;
+            /*border-left: 1px solid black;*/
+            /*border-top: 1px solid black;*/
+
+            display: grid;
+            place-items: center;
+            position: relative;
+        }
+
+        .file, .rank {
+            width: 100px;
+            height: 100px;
+            font-size: 50px;
+            display: grid;
+            place-items: center;
+        }
+
+        .bg-white {
+            background-color: #FECEA1;
+        }
+
+        .bg-black {
+            background-color: #D08B4E;
+        }
+
+        .piece {
+            background-size: 100px;
+            background-repeat: no-repeat;
+        }
+
+        .piece.black.bishop {background-image: url("images/bishop_b.svg");}
+        .piece.black.king {background-image: url("images/king_b.svg");}
+        .piece.black.knight {background-image: url("images/knight_b.svg");}
+        .piece.black.pawn {background-image: url("images/pawn_b.svg");}
+        .piece.black.queen {background-image: url("images/queen_b.svg");}
+        .piece.black.rook {background-image: url("images/rook_b.svg");}
+        .piece.white.bishop {background-image: url("images/bishop_w.svg");}
+        .piece.white.king {background-image: url("images/king_w.svg");}
+        .piece.white.knight {background-image: url("images/knight_w.svg");}
+        .piece.white.pawn {background-image: url("images/pawn_w.svg");}
+        .piece.white.queen {background-image: url("images/queen_w.svg");}
+        .piece.white.rook {background-image: url("images/rook_w.svg");}
+
+        .move-option {
+            /*outline: 2px solid crimson;*/
+            width: 90%;
+            height: 90%;
+            position: absolute;
+            background-color: rgba(32,238,106,0.22);
+            border-radius: 50%;
+            /*z-index: 10;*/
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container"></div>
+
+<script>
+    const createLine = (rank) => {
+        const row = document.createElement('div');
+        row.classList.add('row');
+
+        // const frontRank = document.createElement('div');
+        // frontRank.classList.add('rank', `rank-${rank}`);
+        // frontRank.textContent = rank;
+        // row.appendChild(frontRank);
+
+        for (let i = 0; i < 8; i++) {
+            const cell = document.createElement('div');
+            cell.dataset.yx = `[${8 - rank}, ${i}]`;
+            cell.classList.add('cell');
+            cell.classList.add(rank % 2 === i % 2 ? 'bg-white' : 'bg-black');
+            row.appendChild(cell);
+        }
+
+        // const backRank = document.createElement('div');
+        // backRank.classList.add('rank', `rank-${rank}`);
+        // backRank.textContent = rank;
+        // row.appendChild(backRank);
+
+        return row;
+    }
+
+    const createFileLine = () => {
+        const file = 'abcdefgh';
+        const row = document.createElement('div');
+        // row.classList.add('row');
+
+        {
+            const cell = document.createElement('div');
+            cell.classList.add('file');
+            row.appendChild(cell);
+        }
+
+        for (let i = 0; i < file.length; i++) {
+            const cell = document.createElement('div');
+            cell.classList.add('file');
+            cell.textContent = file[i];
+            row.appendChild(cell);
+        }
+
+        {
+            const cell = document.createElement('div');
+            cell.classList.add('file');
+            row.appendChild(cell);
+        }
+
+        return row;
+    }
+
+    class Piece {
+        // 위 아래 좌 우 좌상 우상 좌하 우하
+        // [y, x]
+        moveOption = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
+
+        static types = {K: 'king', Q: 'queen', R: 'rook', B: 'bishop', N: 'knight', P: 'pawn'}
+        black = {K: 'king_b', Q: 'queen_b', R: 'rook_b', B: 'bishop_b', N: 'knight_b', P: 'pawn_b'}
+        white = {K: 'king_w', Q: 'queen_w', R: 'rook_w', B: 'bishop_w', N: 'knight_w', P: 'pawn_w'}
+
+        validMoveOption = [];
+
+        constructor(container, color, position, type) {
+            this.container = container;
+            this.color = color;
+            this.position = position;
+            this.type = Piece.types[type];
+
+            if (color === 'black') {
+                this.enemy = 'white';
+            } else {
+                this.enemy = 'black';
+            }
+
+            const [y, x] = this.position;
+            this.container?.childNodes[y]?.childNodes[x]?.classList.add('piece', this.color, this.type);
+        }
+
+        toString() {
+            return `{color: ${this.color}, type: ${this.type}}`;
+        }
+
+        remove([y, x]) {
+            this.container?.childNodes[y]?.childNodes[x]?.classList.remove('white', 'black', 'bishop', 'king', 'knight', 'pawn', 'queen', 'rook');
+        }
+
+        isTherePiece([y, x], color) {
+            return this.container?.childNodes[y]?.childNodes[x]?.classList.contains(color);
+        }
+
+        move(position, pieces = []) {
+            // console.log('======================== move', JSON.stringify(this.validMoveOption));
+            if (this.validMoveOption.filter(([y, x]) => position[0] === y && position[1] === x).length === 0) {
+                this.validMoveOption = [];
+                return false;
+            }
+
+            const i = pieces.findIndex(piece => piece.position[0] === position[0] && piece.position[1] === position[1]);
+            console.log('i', i);
+            if (i > -1) {
+                pieces.splice(i, 1);
+            }
+
+            this.remove(this.position);
+            this.remove(position);
+            this.removeValidMoves();
+            this.position = position;
+            const [y, x] = this.position;
+            const {color, type} = this;
+            this.container?.childNodes[y]?.childNodes[x]?.classList.add('piece', color, type);
+            this.validMoveOption = [];
+        }
+
+        removeValidMoves() {
+            Array.from(this.container.querySelectorAll('.move-option')).forEach((x) => x.remove());
+        }
+
+        createMoveOptionElement() {
+            const div = document.createElement('div');
+            div.classList.add('move-option');
+            return div;
+        }
+
+        getValidMoves() {
+            // 기존 이동 가능한 위치 지우기
+            // Array.from(this.container.querySelectorAll('.move-option')).forEach((x) => x.remove());
+            this.removeValidMoves();
+
+            this.moveOption.forEach(option => {
+                const y = this.position[0] + option[0];
+                const x = this.position[1] + option[1];
+
+                if (this.position[0] === y && this.position[1] === x) {
+                    return;
+                }
+
+                if (this.isTherePiece([y, x], this.color)) {
+                    return;
+                }
+
+                this.container?.childNodes[y]?.childNodes[x]?.appendChild(this.createMoveOptionElement());
+                this.validMoveOption.push([y, x]);
+
+                if (this.isTherePiece([y, x], this.enemy)) {
+                    return;
+                }
+            });
+        }
+
+        selected([y, x]) {
+            if (this.position[0] === y && this.position[1] === x) {
+                this.getValidMoves();
+                return true;
+            }
+
+            return false;
+        }
+    }
+
+    class King extends Piece {
+        moveOption = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
+
+        constructor(container, color, position) {
+            super(container, color, position, 'K');
+        }
+    }
+
+    class Queen extends Piece {
+        moveOption = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
+
+        constructor(container, color, position) {
+            super(container, color, position, 'Q');
+        }
+
+        getValidMoves() {
+            // super.getValidMoves();
+            // 기존 이동 가능한 위치 지우기
+            this.removeValidMoves();
+
+            this.moveOption.forEach(option => {
+                // 해당 자리에 내 편의 말이 있으면 패스
+                //
+                for (let i = 0; i < 8; i++) {
+                    const y = this.position[0] + (option[0] * i);
+                    const x = this.position[1] + (option[1] * i);
+
+                    if (this.position[0] === y && this.position[1] === x) {
+                        continue;
+                    }
+
+                    if (this.isTherePiece([y, x], this.color)) {
+                        break;
+                    }
+
+                    const div = document.createElement('div');
+                    div.classList.add('move-option');
+                    this.container?.childNodes[y]?.childNodes[x]?.appendChild(div);
+                    this.validMoveOption.push([y, x]);
+
+                    if (this.isTherePiece([y, x], this.enemy)) {
+                        break;
+                    }
+                }
+            });
+
+        }
+    }
+
+    class Rook extends Piece {
+        moveOption = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+        constructor(container, color, position) {
+            super(container, color, position, 'R');
+        }
+
+        getValidMoves() {
+            // super.getValidMoves();
+            // 기존 이동 가능한 위치 지우기
+            this.removeValidMoves();
+
+            this.moveOption.forEach(option => {
+                // 해당 자리에 내 편의 말이 있으면 패스
+                //
+                for (let i = 0; i < 8; i++) {
+                    const y = this.position[0] + (option[0] * i);
+                    const x = this.position[1] + (option[1] * i);
+
+                    if (this.position[0] === y && this.position[1] === x) {
+                        continue;
+                    }
+
+                    if (this.isTherePiece([y, x], this.color)) {
+                        break;
+                    }
+
+                    const div = document.createElement('div');
+                    div.classList.add('move-option');
+                    this.container?.childNodes[y]?.childNodes[x]?.appendChild(div);
+                    this.validMoveOption.push([y, x]);
+
+                    if (this.isTherePiece([y, x], this.enemy)) {
+                        break;
+                    }
+                }
+            });
+
+        }
+    }
+
+    class Bishop extends Piece {
+        moveOption = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+
+        constructor(container, color, position) {
+            super(container, color, position, 'B');
+        }
+
+        getValidMoves() {
+            // super.getValidMoves();
+            // 기존 이동 가능한 위치 지우기
+            this.removeValidMoves();
+
+            this.moveOption.forEach(option => {
+                // 해당 자리에 내 편의 말이 있으면 패스
+                //
+                for (let i = 0; i < 8; i++) {
+                    const y = this.position[0] + (option[0] * i);
+                    const x = this.position[1] + (option[1] * i);
+
+                    if (this.position[0] === y && this.position[1] === x) {
+                        continue;
+                    }
+
+                    if (this.isTherePiece([y, x], this.color)) {
+                        break;
+                    }
+
+                    const div = document.createElement('div');
+                    div.classList.add('move-option');
+                    this.container?.childNodes[y]?.childNodes[x]?.appendChild(div);
+                    this.validMoveOption.push([y, x]);
+
+                    if (this.isTherePiece([y, x], this.enemy)) {
+                        break;
+                    }
+                }
+            });
+
+        }
+    }
+
+    class Knight extends Piece {
+        moveOption = [[-2, -1], [-2, 1], [2, -1], [2, 1], [-1, -2], [1, -2], [-1, 2], [1, 2]];
+
+        constructor(container, color, position) {
+            super(container, color, position, 'N');
+        }
+    }
+
+    class Pawn extends Piece {
+        moveOption = [[-1, 0], [-1, -1], [-1, 1], [-2, 0]];
+
+        constructor(container, color, position) {
+            super(container, color, position, 'P');
+
+            if (color === 'black') {
+                this.moveOption.forEach(arr => arr[0] *= -1);
+            }
+
+            const lt = this.moveOption[1];
+            const rt = this.moveOption[2];
+            this.lty = lt[0];
+            this.ltx = lt[1];
+            this.rty = rt[0];
+            this.rtx = rt[1];
+
+            this.isFirstMove = true;
+        }
+
+        move(position, pieces = []) {
+            if (this.validMoveOption.filter(([y, x]) => position[0] === y && position[1] === x).length === 0) {
+                this.validMoveOption = [];
+                return false;
+            }
+
+            const i = pieces.findIndex(piece => piece.position[0] === position[0] && piece.position[1] === position[1]);
+            console.log('pawn i', i);
+            if (i > -1) {
+                pieces.splice(i, 1);
+            }
+
+            this.remove(this.position);
+            this.remove(position);
+            this.removeValidMoves();
+            this.position = position;
+            const [y, x] = this.position;
+            const {color, type} = this;
+
+            this.container?.childNodes[y]?.childNodes[x]?.classList.add('piece', color, type);
+            this.validMoveOption = [];
+
+            if (this.isFirstMove) {
+                this.isFirstMove = false;
+                this.moveOption.pop();
+            }
+        }
+
+        createMoveOptionElement() {
+            const div = document.createElement('div');
+            div.classList.add('move-option');
+            return div;
+        }
+
+        getValidMoves() {
+
+            this.removeValidMoves();
+
+            {
+                const option = this.moveOption[0];
+                const vy = this.position[0] + option[0];
+                const vx = this.position[1] + option[1];
+
+                if (!this.isTherePiece([vy, vx], 'white') && !this.isTherePiece([vy, vx], 'black')) {
+                    this.container?.childNodes[vy]?.childNodes[vx]?.appendChild(this.createMoveOptionElement());
+                    this.validMoveOption.push([vy, vx]);
+                }
+            }
+
+            {
+                if (this.isFirstMove) {
+                    const option = this.moveOption[3];
+                    const vy = this.position[0] + option[0];
+                    const vx = this.position[1] + option[1];
+
+                    if (!this.isTherePiece([vy, vx], 'white') && !this.isTherePiece([vy, vx], 'black')) {
+                        this.container?.childNodes[vy]?.childNodes[vx]?.appendChild(this.createMoveOptionElement());
+                        this.validMoveOption.push([vy, vx]);
+                    }
+                }
+            }
+
+            {
+                const option = this.moveOption[1];
+                const vy = this.position[0] + option[0];
+                const vx = this.position[1] + option[1];
+
+                if (this.isTherePiece([vy, vx], this.enemy)) {
+                    this.container?.childNodes[vy]?.childNodes[vx]?.appendChild(this.createMoveOptionElement());
+                    this.validMoveOption.push([vy, vx]);
+                }
+            }
+
+            {
+                const option = this.moveOption[2]
+                const vy = this.position[0] + option[0];
+                const vx = this.position[1] + option[1];
+
+                if (this.isTherePiece([vy, vx], this.enemy)) {
+                    this.container?.childNodes[vy]?.childNodes[vx]?.appendChild(this.createMoveOptionElement());
+                    this.validMoveOption.push([vy, vx]);
+                }
+            }
+        }
+    }
+
+    const init = () => {
+        const container = document.querySelector('.container');
+        // container.appendChild(createFileLine());
+
+        for (let i = 0; i < 8; i++) {
+            const j = 8 - i;
+            container.appendChild(createLine(j, j % 2));
+        }
+
+        // container.appendChild(createFileLine());
+
+
+        const pieces = [
+            new Rook(container, 'black', [0, 0], 'R'),
+            new Knight(container, 'black', [0, 1], 'N'),
+            new Bishop(container, 'black', [0, 2], 'B'),
+            new Queen(container, 'black', [0, 3], 'Q'),
+            new King(container, 'black', [0, 4], 'K'),
+            new Bishop(container, 'black', [0, 5], 'B'),
+            new Knight(container, 'black', [0, 6], 'N'),
+            new Rook(container, 'black', [0, 7], 'R'), // 7
+
+            new Pawn(container, 'black', [1, 0], 'P'),
+            new Pawn(container, 'black', [1, 1], 'P'),
+            new Pawn(container, 'black', [1, 2], 'P'),
+            new Pawn(container, 'black', [1, 3], 'P'),
+            new Pawn(container, 'black', [1, 4], 'P'),
+            new Pawn(container, 'black', [1, 5], 'P'),
+            new Pawn(container, 'black', [1, 6], 'P'),
+            new Pawn(container, 'black', [1, 7], 'P'), // 15
+
+            new Pawn(container, 'white', [6, 0], 'P'),
+            new Pawn(container, 'white', [6, 1], 'P'),
+            new Pawn(container, 'white', [6, 2], 'P'),
+            new Pawn(container, 'white', [6, 3], 'P'),
+            new Pawn(container, 'white', [6, 4], 'P'),
+            new Pawn(container, 'white', [6, 5], 'P'),
+            new Pawn(container, 'white', [6, 6], 'P'),
+            new Pawn(container, 'white', [6, 7], 'P'), // 23
+
+            new Rook(container, 'white', [7, 0], 'R'),
+            new Knight(container, 'white', [7, 1], 'N'),
+            new Bishop(container, 'white', [7, 2], 'B'), // 26
+            new Queen(container, 'white', [7, 3], 'Q'),
+            new King(container, 'white', [7, 4], 'K'),
+            new Bishop(container, 'white', [7, 5], 'B'), // 29
+            new Knight(container, 'white', [7, 6], 'N'),
+            new Rook(container, 'white', [7, 7], 'R'), // 31
+        ];
+
+        let selected = null;
+        container.addEventListener('click', (event) => {
+            let target = event.target;
+
+            if (target.classList.contains('move-option')) {
+                target = target.parentNode;
+            }
+
+            if (!target.dataset.yx) {
+                return false;
+            }
+
+            const yx = JSON.parse(target.dataset.yx);
+
+
+
+            if (selected === null) {
+                selected = pieces.filter(piece => piece.selected(yx))[0] || null;
+            } else {
+                if (JSON.stringify(yx) !== JSON.stringify(selected.position)) {
+                    selected.move(yx, pieces);
+                }
+                selected.removeValidMoves();
+                selected = null;
+            }
+
+            // console.clear();
+            pieces.forEach(x => console.log(JSON.stringify(x + '')));
+        });
+    }
+    init();
+
+
+
+</script>
+</body>
+</html>
